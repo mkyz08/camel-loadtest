@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:camel="http://camel.apache.org/schema/spring"
+	xmlns:util="http://www.springframework.org/schema/util"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+          http://www.springframework.org/schema/beans/spring-beans.xsd
+          http://camel.apache.org/schema/spring
+          http://camel.apache.org/schema/spring/camel-spring.xsd
+          http://www.springframework.org/schema/context
+          http://www.springframework.org/schema/context/spring-context.xsd
+          http://www.springframework.org/schema/util
+          http://www.springframework.org/schema/util/spring-util.xsd">
+
+<!--
+15分間隔起動　連続起動
+何時限連続か
+スレッド指定
+ID指定（機器数
+時限指定
+PROCESSORは1つ、SELECT、INSERT
+
+create table meter_reads (
+    meter_id varchar(20),
+    read_time timestamp,
+	value numeric
+);
+
+drop index meter_reads_idx1;
+create index meter_reads_idx1 on meter_reads(meter_id, read_time);
+ -->
+
+	<context:component-scan base-package="example.camelloadtest.*" />
+
+	<bean id="hikariConfig" class="com.zaxxer.hikari.HikariConfig">
+		<property name="jdbcUrl" value="jdbc:postgresql://192.168.10.48:5432/testdb" />
+		<property name="driverClassName" value="org.postgresql.Driver" />
+		<property name="minimumIdle" value="100" />
+		<property name="maximumPoolSize" value="100" />
+		<property name="connectionTimeout" value="30000" />
+		<property name="idleTimeout" value="600000" />
+		<property name="maxLifetime" value="1800000" />
+		<property name="username" value="testuser" />
+		<property name="password" value="testuser" />
+		<property name="connectionInitSql" value="SELECT 1" />
+		<property name="autoCommit" value="false" />
+		<!-- <property name="connectionTestQuery" value="SELECT 1" />  --><!-- connectionTestQueryは非推奨 -->
+		<property name="validationTimeout" value="5000" />
+		<!-- <property name="registerMbeans" value="true" /> -->
+		<property name="poolName" value="testHikariPool" />
+	</bean>
+
+	<bean id="dataSource" class="com.zaxxer.hikari.HikariDataSource"
+		destroy-method="close">
+		<constructor-arg ref="hikariConfig" />
+	</bean>
+
+<!--
+    <bean id="testDataSet"
+        class="org.apache.camel.component.dataset.SimpleDataSet">
+        <property name="size" value="${NUM_METER}" />
+        <property name="reportCount" value="${NUM_METER}" />
+    </bean>
+ -->
+
+ 	<bean id="transReadTimeProcessor" class="example.camelloadtest.TranslateReadTimeProcessor" />
+	<bean id="transMeterIdProcessor" class="example.camelloadtest.TranslateMeterIdProcessor" />
+	<bean id="loadTestProcessor" class="example.camelloadtest.LoadTestProcessor" />
+
+	<bean id="bridgePropertyPlaceholder" class="org.apache.camel.spring.spi.BridgePropertyPlaceholderConfigurer">
+        <property name="location" value="classpath:myapp.properties"/>
+    </bean>
+
+	<bean id="shutdownBean" class="example.camelloadtest.ShutdownBean" />
+
+	<bean id="createDataSetProcessor" class="example.camelloadtest.CreateDataSetProcessor" />
+
+	<camelContext xmlns="http://camel.apache.org/schema/spring"
+		id="main">
+
+		<threadPoolProfile id="customThreadPoolProfile"
+			poolSize="100" maxPoolSize="100" maxQueueSize="1000"
+			keepAliveTime="60" rejectedPolicy="CallerRuns" />
+
+	<route id="loadTest">
+<!--		<from uri="quartz2://test/testTimer?cron=0/10+*+*+*+*+?" /> -->
+<!--		<from uri="quartz2://test/testTimer?cron=0+0/15+*+*+*+?" /> -->
+		<from uri="timer:trigger?repeatCount=10" />
+		<process ref="transReadTimeProcessor" />
+		<process ref="createDataSetProcessor" />
+		<to uri="direct:split" />
+	</route>
+
+	<route>
+		<from uri="direct:split" />
+		<split parallelProcessing="true" streaming="false"
+			executorServiceRef="customThreadPoolProfile">
+			<simple>${body}</simple>
+<!-- 			<process ref="transMeterIdProcessor" /> -->
+ 			<process ref="loadTestProcessor" />
+			<to uri="log:sample?level=INFO&amp;groupInterval=1000&amp;groupDelay=200&amp;groupActiveOnly=false" />
+		</split>
+
+<!-- 		<to uri="log:loadTestLog?showHeaders=true" /> -->
+		<log message="loadTest end" />
+
+
+<!-- 		<log message="currentRepeatCount: ${header.currentRepeatCount}" /> -->
+		<choice>
+			<when>
+ 				<method ref="transReadTimeProcessor" method="isMaxRepeat"/>
+				<to uri="direct:shutdown" />
+			</when>
+		</choice>
+	</route>
+
+    <route id="ShutdownRoute">
+        <from uri="direct:shutdown" />
+		<delay>
+			<constant>5000</constant>
+		</delay>
+        <log message="Shutdown..." />
+        <to uri="bean:shutdownBean" />
+    </route>
+	</camelContext>
+</beans>
