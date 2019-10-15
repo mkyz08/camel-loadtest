@@ -88,6 +88,12 @@ create index meter_reads_idx1 on meter_reads(meter_id, read_time);
 <!--		<from uri="quartz2://test/testTimer?cron=0+0/15+*+*+*+?" /> -->
 		<from uri="timer:trigger?repeatCount=10" />
 		<process ref="transReadTimeProcessor" />
+		<choice>
+			<when>
+ 				<method ref="transReadTimeProcessor" method="isMaxRepeat"/>
+				<to uri="direct:shutdown" />
+			</when>
+		</choice>
 		<process ref="createDataSetProcessor" />
 		<to uri="direct:split" />
 	</route>
@@ -106,12 +112,6 @@ create index meter_reads_idx1 on meter_reads(meter_id, read_time);
 
 
 <!-- 		<log message="currentRepeatCount: ${header.currentRepeatCount}" /> -->
-		<choice>
-			<when>
- 				<method ref="transReadTimeProcessor" method="isMaxRepeat"/>
-				<to uri="direct:shutdown" />
-			</when>
-		</choice>
 	</route>
 
     <route id="ShutdownRoute">

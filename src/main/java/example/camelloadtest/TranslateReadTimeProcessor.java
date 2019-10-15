@@ -46,6 +46,6 @@ public class TranslateReadTimeProcessor implements Processor {
 
     public boolean isMaxRepeat(Exchange exchange) {
     	logger.info("end repeat count: {}", getCount());
-    	return getCount() == maxRepeat;
+    	return getCount() <= maxRepeat;
     }
 }
