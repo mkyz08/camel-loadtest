@@ -27,7 +27,6 @@ public class CommonUtil {
         return Date.from(instant);
     }
 
-
 	public static Timestamp toTimestamp(LocalDateTime localDateTime) {
 		return Timestamp.valueOf(localDateTime);
 	}

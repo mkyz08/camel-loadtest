@@ -97,7 +97,6 @@ create index meter_reads_idx1 on meter_reads(meter_id, read_time);
 		<split parallelProcessing="true" streaming="false"
 			executorServiceRef="customThreadPoolProfile">
 			<simple>${body}</simple>
-<!-- 			<process ref="transMeterIdProcessor" /> -->
  			<process ref="loadTestProcessor" />
 			<to uri="log:sample?level=INFO&amp;groupInterval=1000&amp;groupDelay=200&amp;groupActiveOnly=false" />
 		</split>

@@ -26,5 +26,4 @@ public class TranslateMeterIdProcessor implements Processor {
 
         exchange.setIn(message);
     }
-
 }
